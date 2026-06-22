@@ -201,6 +201,18 @@ def render_object_card(item: Dict[str, Any], index: int) -> None:
         st.write(recommendations if recommendations else ["No recommendations provided."])
 
 
+def get_gemini_api_key() -> str:
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if api_key:
+        return api_key
+
+    # Streamlit Community Cloud exposes secrets through st.secrets.
+    try:
+        return str(st.secrets.get("GEMINI_API_KEY", "")).strip()
+    except Exception:
+        return ""
+
+
 def main() -> None:
     inject_styles()
 
@@ -265,9 +277,11 @@ def main() -> None:
     if not analyze_clicked:
         return
 
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    api_key = get_gemini_api_key()
     if not api_key:
-        st.error("Missing `GEMINI_API_KEY`. Add it to your environment or `.env` before running the app.")
+        st.error(
+            "Missing `GEMINI_API_KEY`. Add it to your local `.env` file or to Streamlit Cloud app secrets."
+        )
         st.stop()
 
     with st.spinner("Analyzing image and evaluating object quality..."):
