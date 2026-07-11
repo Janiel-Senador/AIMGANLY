@@ -119,6 +119,27 @@ def inject_styles() -> None:
                 color: #f8fafc !important;
                 border-color: rgba(148, 163, 184, 0.22) !important;
             }
+            div[data-baseweb="select"] * {
+                color: #f8fafc !important;
+            }
+            div[data-baseweb="popover"] ul,
+            div[data-baseweb="popover"] li,
+            div[data-baseweb="popover"] div {
+                background: #0f172a !important;
+                color: #f8fafc !important;
+            }
+            div[role="listbox"] {
+                background: #0f172a !important;
+                border: 1px solid rgba(148, 163, 184, 0.22) !important;
+            }
+            div[role="option"] {
+                background: #0f172a !important;
+                color: #f8fafc !important;
+            }
+            div[role="option"][aria-selected="true"] {
+                background: rgba(37, 99, 235, 0.35) !important;
+                color: #ffffff !important;
+            }
             [data-testid="stFileUploaderDropzone"] {
                 background: #f8fafc !important;
                 border: 1px dashed rgba(37, 99, 235, 0.45) !important;
