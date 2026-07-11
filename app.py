@@ -85,10 +85,52 @@ def inject_styles() -> None:
                 color: #f8fafc !important;
                 border: 1px solid rgba(148, 163, 184, 0.22) !important;
             }
+            .stButton > button,
+            .stDownloadButton > button,
+            div[data-testid="stFormSubmitButton"] > button {
+                background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+                color: #ffffff !important;
+                border: 1px solid rgba(96, 165, 250, 0.55) !important;
+                border-radius: 12px !important;
+                font-weight: 700 !important;
+                box-shadow: 0 10px 24px rgba(37, 99, 235, 0.28);
+            }
+            .stButton > button:hover,
+            .stDownloadButton > button:hover,
+            div[data-testid="stFormSubmitButton"] > button:hover {
+                background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+                color: #ffffff !important;
+                border-color: rgba(147, 197, 253, 0.7) !important;
+            }
+            .stButton > button[kind="secondary"],
+            .stDownloadButton > button[kind="secondary"] {
+                background: rgba(15, 23, 42, 0.92) !important;
+                color: #f8fafc !important;
+                border: 1px solid rgba(148, 163, 184, 0.32) !important;
+                box-shadow: none;
+            }
+            .stButton > button[kind="secondary"]:hover,
+            .stDownloadButton > button[kind="secondary"]:hover {
+                background: rgba(30, 41, 59, 0.98) !important;
+                color: #ffffff !important;
+            }
             div[data-baseweb="select"] > div, div[data-baseweb="base-input"] > div {
                 background: rgba(15, 23, 42, 0.92) !important;
                 color: #f8fafc !important;
                 border-color: rgba(148, 163, 184, 0.22) !important;
+            }
+            [data-testid="stFileUploaderDropzone"] {
+                background: #f8fafc !important;
+                border: 1px dashed rgba(37, 99, 235, 0.45) !important;
+            }
+            [data-testid="stFileUploaderDropzone"] * {
+                color: #0f172a !important;
+            }
+            [data-testid="stFileUploaderDropzone"] small {
+                color: #334155 !important;
+            }
+            [data-testid="stFileUploaderDropzone"] svg {
+                fill: #1d4ed8 !important;
             }
             .hero {
                 background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.92));
