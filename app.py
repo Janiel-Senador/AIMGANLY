@@ -253,6 +253,7 @@ def clear_form_state(prefix: str) -> None:
 def init_session_state() -> None:
     st.session_state.setdefault("auth_user", None)
     st.session_state.setdefault("ci_submit_notes", "")
+    st.session_state.setdefault("ci_clear_submit_notes", False)
     st.session_state.setdefault("ao_selected_record_id", "")
     st.session_state.setdefault("ao_template_key", DEFAULT_TEMPLATE_KEY)
     st.session_state.setdefault("ao_export_bytes", b"")
@@ -418,6 +419,10 @@ def render_record_metadata(record: Dict[str, Any]) -> None:
 
 
 def render_ci_dashboard(user: Dict[str, str]) -> None:
+    if st.session_state.get("ci_clear_submit_notes"):
+        st.session_state["ci_submit_notes"] = ""
+        st.session_state["ci_clear_submit_notes"] = False
+
     my_records = list_records_for_user("ci", user["email"])
     pending_count = sum(1 for record in my_records if record.get("status") == "submitted_to_ao")
     sent_count = sum(1 for record in my_records if record.get("status") == "submitted_to_officer")
@@ -461,7 +466,7 @@ def render_ci_dashboard(user: Dict[str, str]) -> None:
                 st.error("Please paste the CI notes before submitting.")
             else:
                 record = create_ci_submission(notes, user)
-                st.session_state["ci_submit_notes"] = ""
+                st.session_state["ci_clear_submit_notes"] = True
                 st.success(f"Notes submitted successfully. Record ID: {record['id']}")
                 st.rerun()
 
