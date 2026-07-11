@@ -481,6 +481,36 @@ def render_record_metadata(record: Dict[str, Any]) -> None:
     )
 
 
+def render_officer_notes_section(record: Dict[str, Any]) -> None:
+    record_id = record.get("id", "record")
+    notes_text = record.get("ci_notes", "")
+    collapsed_key = f"officer_notes_collapsed_{record_id}"
+    st.session_state.setdefault(collapsed_key, False)
+
+    title_col, toggle_col, download_col = st.columns([6.6, 1.6, 1.8])
+    with title_col:
+        st.markdown('<div class="section-title" style="margin-top:12px;">CI Notes</div>', unsafe_allow_html=True)
+    with toggle_col:
+        toggle_label = "Expand" if st.session_state[collapsed_key] else "Minimize"
+        if st.button(toggle_label, key=f"officer_toggle_notes_{record_id}", use_container_width=True):
+            st.session_state[collapsed_key] = not st.session_state[collapsed_key]
+            st.rerun()
+    with download_col:
+        st.download_button(
+            "Download Notes",
+            data=notes_text.encode("utf-8"),
+            file_name=f"{record_id}_ci_notes.txt",
+            mime="text/plain",
+            key=f"officer_notes_download_{record_id}",
+            use_container_width=True,
+        )
+
+    if st.session_state[collapsed_key]:
+        st.caption("CI notes minimized.")
+    else:
+        st.markdown(f'<div class="note-box">{notes_text}</div>', unsafe_allow_html=True)
+
+
 def render_ci_dashboard(user: Dict[str, str]) -> None:
     if st.session_state.get("ci_clear_submit_notes"):
         st.session_state["ci_submit_notes"] = ""
@@ -987,8 +1017,7 @@ def render_officer_dashboard(user: Dict[str, str]) -> None:
                 st.write(f"AO: `{record.get('ao_name', 'Unknown AO')}`")
                 st.write(f"Template: `{record.get('template_label', 'Unknown Template')}`")
                 st.write(f"Address: {parsed.get('complete_address', 'No address provided')}")
-                st.markdown('<div class="section-title" style="margin-top:12px;">CI Notes</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="note-box">{record.get("ci_notes", "")}</div>', unsafe_allow_html=True)
+                render_officer_notes_section(record)
                 file_bytes = read_file_bytes(record.get("generated_file_path", ""))
                 if file_bytes:
                     st.download_button(
