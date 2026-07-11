@@ -8,12 +8,25 @@ from typing import Any, Dict, List, Tuple
 from openpyxl import load_workbook
 
 
-DEFAULT_TEMPLATE_PATH = Path(
-    r"C:\Users\Jan\Downloads\PDRN-MAPPING-1_efa98837-83fc-4d76-987a-3101659aafce.xls"
-)
+TEMPLATE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
+    "bpi": {
+        "label": "BPI PDRN",
+        "path": Path(r"C:\Users\Jan\Downloads\PDRN-MAPPING-1_efa98837-83fc-4d76-987a-3101659aafce.xls"),
+        "sheet_name": "PDRN",
+    },
+    "maybank": {
+        "label": "Maybank PDRN",
+        "path": Path(r"C:\Users\Jan\Downloads\MAYBANK-PDRN_49cb9e3d-7f16-48f8-9d3f-4acb6e339d34.xlsx"),
+        "sheet_name": "Sheet1",
+    },
+}
+
+DEFAULT_TEMPLATE_KEY = "bpi"
+DEFAULT_TEMPLATE_PATH = TEMPLATE_DEFINITIONS[DEFAULT_TEMPLATE_KEY]["path"]
 
 
 CI_FORM_DEFAULTS: Dict[str, Any] = {
+    "reference_number": "",
     "bpi_request_number": "",
     "los_request_number": "",
     "account_name": "",
@@ -24,6 +37,7 @@ CI_FORM_DEFAULTS: Dict[str, Any] = {
     "subject_bday_age": "",
     "subject_birthplace": "",
     "subject_civil_status": "",
+    "subject_gender": "",
     "subject_nationality": "",
     "subject_education": "",
     "subject_employment": "",
@@ -35,6 +49,7 @@ CI_FORM_DEFAULTS: Dict[str, Any] = {
     "spouse_bday_age": "",
     "spouse_birthplace": "",
     "spouse_civil_status": "",
+    "spouse_gender": "",
     "spouse_nationality": "",
     "spouse_education": "",
     "spouse_employment": "",
@@ -44,6 +59,7 @@ CI_FORM_DEFAULTS: Dict[str, Any] = {
     "present_address": "",
     "previous_address": "",
     "province": "",
+    "region": "",
     "contact_number": "",
     "length_of_stay": "",
     "ownership": "",
@@ -81,6 +97,8 @@ CI_FORM_DEFAULTS: Dict[str, Any] = {
     "informants": "",
     "main_informant": "",
     "field_investigator": "",
+    "requesting_officer": "",
+    "date_time_inspected": "",
     "submitted_date": "",
     "submitted_time": "",
     "outcome": "",
@@ -153,12 +171,8 @@ def normalize_label(value: str) -> str:
     return re.sub(r"\s+", " ", cleaned)
 
 
-def is_placeholder(value: str) -> bool:
-    return normalize_label(value) in {"", "NP", "NONE", "NS"}
-
-
 def compact_value(value: str) -> str:
-    return re.sub(r"\s+", " ", value.replace("\n", " ")).strip()
+    return re.sub(r"\s+", " ", str(value or "").replace("\n", " ")).strip()
 
 
 def join_name(last_name: str, first_name: str, middle_name: str) -> str:
@@ -179,6 +193,7 @@ def split_address(address: str) -> Dict[str, str]:
         "address_line_3": "",
         "barangay": "",
         "city": "",
+        "region": "",
     }
     if not raw:
         return result
@@ -417,6 +432,8 @@ def parse_ci_notes(notes: str) -> Dict[str, Any]:
         record["submitted_date"] = datetime.now().strftime("%Y-%m-%d")
     if not record["submitted_time"]:
         record["submitted_time"] = datetime.now().strftime("%I:%M %p")
+    if not record["date_time_inspected"]:
+        record["date_time_inspected"] = f"{record['submitted_date']} {record.get('time_of_visit', '').strip()}".strip()
 
     return record
 
@@ -450,13 +467,58 @@ def build_export_payload(record: Dict[str, Any]) -> Dict[str, Any]:
     payload["informant_list"] = parse_informant_lines(payload.get("informants", ""))
     payload["address_type"] = payload.get("address_type") or "Residential Address"
     payload["type_of_residence_export"] = "House and lot" if payload.get("type_of_residence") else ""
+    payload["subject_income"] = " / ".join(
+        [value for value in [payload.get("subject_employment", ""), payload.get("subject_business", "")] if compact_value(value)]
+    )
+    payload["spouse_income"] = " / ".join(
+        [value for value in [payload.get("spouse_employment", ""), payload.get("spouse_business", "")] if compact_value(value)]
+    )
+    payload["request_reference"] = (
+        payload.get("reference_number")
+        or payload.get("los_request_number")
+        or payload.get("bpi_request_number")
+        or payload.get("account_name")
+    )
+    payload["date_time_submitted"] = f"{payload.get('submitted_date', '')} {payload.get('submitted_time', '')}".strip()
+    payload["residence_description"] = compact_value(
+        " | ".join(
+            value
+            for value in [
+                payload.get("type_of_residence", ""),
+                payload.get("no_of_storey", ""),
+                payload.get("classification", ""),
+                payload.get("house_condition", ""),
+                payload.get("made_of", ""),
+            ]
+            if compact_value(value)
+        )
+    )
+    payload["general_appearance"] = compact_value(
+        " | ".join(
+            value
+            for value in [
+                payload.get("appearance", ""),
+                payload.get("house_color", ""),
+                payload.get("gate_color", ""),
+                payload.get("fence_color", ""),
+                payload.get("exterior", ""),
+            ]
+            if compact_value(value)
+        )
+    )
     return payload
 
 
-def get_template_workbook(template_bytes: bytes | None = None):
+def get_available_templates() -> Dict[str, Dict[str, Any]]:
+    return TEMPLATE_DEFINITIONS
+
+
+def get_template_workbook(template_key: str = DEFAULT_TEMPLATE_KEY, template_bytes: bytes | None = None):
     if template_bytes:
         return load_workbook(BytesIO(template_bytes))
-    with open(DEFAULT_TEMPLATE_PATH, "rb") as handle:
+
+    template_path = TEMPLATE_DEFINITIONS[template_key]["path"]
+    with open(template_path, "rb") as handle:
         return load_workbook(BytesIO(handle.read()))
 
 
@@ -464,11 +526,8 @@ def set_value(sheet, cell_ref: str, value: Any) -> None:
     sheet[cell_ref] = "" if value is None else value
 
 
-def export_ci_to_template(record: Dict[str, Any], template_bytes: bytes | None = None) -> Tuple[bytes, str]:
-    payload = build_export_payload(record)
-    workbook = get_template_workbook(template_bytes)
-    sheet = workbook["PDRN"]
-
+def fill_bpi_template(workbook, payload: Dict[str, Any]) -> None:
+    sheet = workbook[TEMPLATE_DEFINITIONS["bpi"]["sheet_name"]]
     cell_map = {
         "P4": payload.get("bpi_request_number", ""),
         "P5": payload.get("los_request_number", ""),
@@ -519,12 +578,91 @@ def export_ci_to_template(record: Dict[str, Any], template_bytes: bytes | None =
         set_value(sheet, f"V{row_number}", informant.get("relationship", ""))
         set_value(sheet, f"AI{row_number}", informant.get("address", ""))
 
+
+def fill_maybank_template(workbook, payload: Dict[str, Any]) -> None:
+    sheet = workbook[TEMPLATE_DEFINITIONS["maybank"]["sheet_name"]]
+    cell_map = {
+        "J10": payload.get("request_reference", ""),
+        "AB10": payload.get("date_time_inspected", ""),
+        "J12": payload.get("requesting_officer", ""),
+        "AB12": payload.get("date_time_submitted", ""),
+        "F16": payload.get("applicant_name", ""),
+        "Q16": payload.get("subject_bday_age", ""),
+        "V16": payload.get("subject_education", ""),
+        "AG16": payload.get("subject_income", ""),
+        "F18": payload.get("subject_civil_status", ""),
+        "Q18": payload.get("subject_gender", ""),
+        "V18": payload.get("subject_nationality", ""),
+        "AG18": payload.get("dependents_count", ""),
+        "F20": payload.get("spouse_name", ""),
+        "Q20": payload.get("spouse_bday_age", ""),
+        "V20": payload.get("spouse_education", ""),
+        "AG20": payload.get("spouse_income", ""),
+        "F22": payload.get("spouse_civil_status", ""),
+        "Q22": payload.get("spouse_gender", ""),
+        "V22": payload.get("spouse_nationality", ""),
+        "B34": payload.get("address_line_1", ""),
+        "I34": payload.get("address_line_2", ""),
+        "N34": payload.get("address_line_3", ""),
+        "T34": payload.get("barangay", ""),
+        "Y34": payload.get("city", ""),
+        "AE34": payload.get("province", ""),
+        "AJ34": payload.get("region", ""),
+        "L37": payload.get("present_address", "") or payload.get("previous_address", ""),
+        "J39": payload.get("ownership", ""),
+        "AD41": payload.get("ownership", ""),
+        "AD42": "",
+        "AD43": payload.get("outcome", ""),
+        "E49": payload.get("length_of_stay", ""),
+        "B53": payload.get("residence_description", ""),
+        "W53": payload.get("contact_number", ""),
+        "AF53": payload.get("ownership", ""),
+        "P54": payload.get("lot_area", ""),
+        "P55": payload.get("floor_area", ""),
+        "K58": payload.get("vehicles", ""),
+        "B61": payload.get("general_appearance", ""),
+        "B64": payload.get("utility_bills", ""),
+        "K64": payload.get("remarks", ""),
+        "W64": payload.get("neighborhood_classification", ""),
+        "B71": payload.get("neighborhood", ""),
+        "P71": payload.get("accessibility", ""),
+        "W71": payload.get("landmark", ""),
+        "AF71": payload.get("bdo_distance", ""),
+        "B80": payload.get("vehicles", ""),
+        "B86": payload.get("remarks", ""),
+        "B98": payload["main_informant_details"].get("name", ""),
+        "T98": payload["main_informant_details"].get("relationship", ""),
+    }
+
+    for cell_ref, value in cell_map.items():
+        set_value(sheet, cell_ref, value)
+
+    informant_rows = [98, 99, 100]
+    all_informants = payload["informant_list"][:3]
+    for row_number, informant in zip(informant_rows, all_informants):
+        set_value(sheet, f"B{row_number}", informant.get("name", ""))
+        set_value(sheet, f"T{row_number}", informant.get("relationship", ""))
+
+
+def export_ci_to_template(
+    record: Dict[str, Any],
+    template_key: str = DEFAULT_TEMPLATE_KEY,
+    template_bytes: bytes | None = None,
+) -> Tuple[bytes, str]:
+    payload = build_export_payload(record)
+    workbook = get_template_workbook(template_key=template_key, template_bytes=template_bytes)
+
+    if template_key == "maybank":
+        fill_maybank_template(workbook, payload)
+    else:
+        fill_bpi_template(workbook, payload)
+
     output = BytesIO()
     workbook.save(output)
     output.seek(0)
 
-    applicant_slug = re.sub(r"[^A-Za-z0-9]+", "_", payload.get("subject_last_name", "ci_record")).strip("_") or "ci_record"
-    filename = f"{applicant_slug}_pdrn_output.xlsx"
+    applicant_slug = re.sub(r"[^A-Za-z0-9]+", "_", payload.get("subject_last_name", "record")).strip("_") or "record"
+    filename = f"{template_key}_{applicant_slug}_pdrn_output.xlsx"
     return output.getvalue(), filename
 
 
