@@ -1077,7 +1077,12 @@ def get_template_workbook(template_key: str = DEFAULT_TEMPLATE_KEY, template_byt
 
 
 def set_value(sheet, cell_ref: str, value: Any) -> None:
-    sheet[cell_ref] = "" if value is None else value
+    target_ref = cell_ref
+    for merged_range in sheet.merged_cells.ranges:
+        if cell_ref in merged_range:
+            target_ref = merged_range.start_cell.coordinate
+            break
+    sheet[target_ref] = "" if value is None else value
 
 
 def fill_bpi_template(workbook, payload: Dict[str, Any]) -> None:
