@@ -17,7 +17,7 @@ TEMPLATE_DEFINITIONS: Dict[str, Dict[str, Any]] = {
     },
     "maybank": {
         "label": "Maybank PDRN",
-        "path": Path(r"C:\Users\Jan\Downloads\MAYBANK-PDRN_49cb9e3d-7f16-48f8-9d3f-4acb6e339d34.xlsx"),
+        "path": Path(__file__).resolve().parent / "maybank" / "pdrn" / "MAYBANK PDRN.xlsx",
         "sheet_name": "Sheet1",
     },
 }
@@ -408,6 +408,49 @@ def split_address(address: str) -> Dict[str, str]:
     return result
 
 
+def split_maybank_address(address: str) -> Dict[str, str]:
+    raw = compact_value(address)
+    result = {
+        "unit_building": "",
+        "street": "",
+        "village_subdivision": "",
+        "barangay": "",
+        "city": "",
+        "province": "",
+        "region": "",
+    }
+    if not raw:
+        return result
+
+    parts = [compact_value(part) for part in raw.split(",") if compact_value(part)]
+    first_part = parts[0] if parts else raw
+    first_match = re.match(r"^([0-9A-Z\-\/]+)\s+(.+)$", first_part, flags=re.IGNORECASE)
+    if first_match:
+        result["unit_building"] = compact_value(first_match.group(1))
+        result["street"] = compact_value(first_match.group(2))
+    else:
+        result["street"] = first_part
+
+    leftovers: List[str] = []
+    for part in parts[1:]:
+        normalized = normalize_label(part)
+        if "BRGY" in normalized or "BARANGAY" in normalized:
+            result["barangay"] = part
+        elif "CITY" in normalized or "MUNICIPALITY" in normalized:
+            result["city"] = part
+        elif not result["province"] and len(parts) >= 2 and part == parts[-1]:
+            result["province"] = part
+        else:
+            leftovers.append(part)
+
+    if leftovers:
+        result["village_subdivision"] = leftovers[0]
+        if len(leftovers) > 1 and not result["province"]:
+            result["province"] = leftovers[-1]
+
+    return result
+
+
 def infer_dependents(dependents_text: str) -> Tuple[str, str]:
     value = compact_value(dependents_text)
     if not value or normalize_label(value) == "NONE":
@@ -420,6 +463,31 @@ def infer_dependents(dependents_text: str) -> Tuple[str, str]:
         if age_match:
             ages.append(age_match.group(1))
     return str(len(entries)), ", ".join(ages)
+
+
+def parse_dependent_rows(dependents_text: str) -> List[Dict[str, str]]:
+    rows: List[Dict[str, str]] = []
+    for raw_line in dependents_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if normalize_label(line) == "NONE":
+            continue
+        line = re.sub(r"^\d+[\.\)]?\s*", "", line).strip()
+        if not line:
+            continue
+
+        segments = [compact_value(segment) for segment in line.split("/") if compact_value(segment)]
+        rows.append(
+            {
+                "name": segments[0] if len(segments) > 0 else line,
+                "age": segments[1] if len(segments) > 1 else "",
+                "school": segments[2] if len(segments) > 2 else "",
+                "grade": segments[3] if len(segments) > 3 else "",
+                "course": segments[4] if len(segments) > 4 else "",
+            }
+        )
+    return rows[:3]
 
 
 def infer_utility_bills(record: Dict[str, Any]) -> str:
@@ -662,6 +730,76 @@ def build_structured_main_informant(record: Dict[str, Any]) -> str:
     return "\n".join(detail_lines).strip()
 
 
+def build_maybank_informants(record: Dict[str, Any]) -> List[Dict[str, str]]:
+    informants: List[Dict[str, str]] = []
+
+    if compact_value(record.get("barangay_informant_name", "")):
+        relationship = compact_value(
+            " / ".join(
+                value
+                for value in [
+                    "Barangay Informant",
+                    record.get("barangay_informant_position", ""),
+                    record.get("barangay_subject_known", ""),
+                ]
+                if compact_value(value)
+            )
+        )
+        informants.append({"name": record.get("barangay_informant_name", ""), "relationship": relationship})
+
+    for index in range(1, 4):
+        prefix = f"neighbor_{index}"
+        name = compact_value(record.get(f"{prefix}_name", ""))
+        if not name:
+            continue
+        relationship = compact_value(
+            " / ".join(
+                value
+                for value in [
+                    record.get(f"{prefix}_relationship", ""),
+                    record.get(f"{prefix}_known", ""),
+                ]
+                if compact_value(value)
+            )
+        )
+        informants.append({"name": name, "relationship": relationship})
+
+    if compact_value(record.get("main_informant_name", "")):
+        relationship = compact_value(
+            " / ".join(
+                value
+                for value in [
+                    "Main Informant",
+                    record.get("main_informant_relationship", ""),
+                ]
+                if compact_value(value)
+            )
+        )
+        informants.append({"name": record.get("main_informant_name", ""), "relationship": relationship})
+
+    if informants:
+        return informants
+
+    return parse_informant_lines(record.get("informants", ""))
+
+
+def split_vehicle_unit_year_model(value: str) -> Dict[str, str]:
+    raw = compact_value(value)
+    if not raw:
+        return {"make_model": "", "year_model": ""}
+
+    match = re.search(r"\b(19|20)\d{2}\b", raw)
+    if not match:
+        return {"make_model": raw, "year_model": ""}
+
+    year = match.group(0)
+    make_model = compact_value(raw[: match.start()])
+    trailing = compact_value(raw[match.end() :])
+    if trailing:
+        make_model = compact_value(f"{make_model} {trailing}")
+    return {"make_model": make_model, "year_model": year}
+
+
 def parse_ci_notes(notes: str) -> Dict[str, Any]:
     notes = clean_notes_text(notes)
     record = deepcopy(CI_FORM_DEFAULTS)
@@ -863,8 +1001,12 @@ def build_export_payload(record: Dict[str, Any]) -> Dict[str, Any]:
     dependents_count, dependents_ages = infer_dependents(payload.get("dependents", ""))
     payload["dependents_count"] = dependents_count
     payload["dependents_ages"] = dependents_ages
+    payload["dependent_rows"] = parse_dependent_rows(payload.get("dependents", ""))
     address_parts = split_address(payload.get("complete_address", ""))
     payload.update(address_parts)
+    payload["maybank_address_parts"] = split_maybank_address(
+        payload.get("verified_address", "") or payload.get("complete_address", "") or payload.get("given_address", "")
+    )
     payload["utility_bills"] = infer_utility_bills(payload)
     payload["living_condition"] = infer_living_condition(payload)
     payload["neighborhood_classification"] = infer_neighborhood_classification(payload)
@@ -875,6 +1017,8 @@ def build_export_payload(record: Dict[str, Any]) -> Dict[str, Any]:
     payload["outcome"] = infer_outcome(payload)
     payload["main_informant_details"] = parse_named_informant(payload.get("main_informant", ""))
     payload["informant_list"] = parse_informant_lines(payload.get("informants", ""))
+    payload["maybank_informants"] = build_maybank_informants(payload)
+    payload["vehicle_details"] = split_vehicle_unit_year_model(payload.get("vehicle_unit_year_model", "") or payload.get("vehicles", ""))
     payload["address_type"] = payload.get("address_type") or "Residential Address"
     payload["type_of_residence_export"] = "House and lot" if payload.get("type_of_residence") else ""
     payload["subject_income"] = " / ".join(
@@ -991,6 +1135,8 @@ def fill_bpi_template(workbook, payload: Dict[str, Any]) -> None:
 
 def fill_maybank_template(workbook, payload: Dict[str, Any]) -> None:
     sheet = workbook[TEMPLATE_DEFINITIONS["maybank"]["sheet_name"]]
+    address_parts = payload.get("maybank_address_parts", {})
+    vehicle_details = payload.get("vehicle_details", {})
     cell_map = {
         "J10": payload.get("request_reference", ""),
         "AB10": payload.get("date_time_inspected", ""),
@@ -1011,44 +1157,60 @@ def fill_maybank_template(workbook, payload: Dict[str, Any]) -> None:
         "F22": payload.get("spouse_civil_status", ""),
         "Q22": payload.get("spouse_gender", ""),
         "V22": payload.get("spouse_nationality", ""),
-        "B34": payload.get("address_line_1", ""),
-        "I34": payload.get("address_line_2", ""),
-        "N34": payload.get("address_line_3", ""),
-        "T34": payload.get("barangay", ""),
-        "Y34": payload.get("city", ""),
-        "AE34": payload.get("province", ""),
-        "AJ34": payload.get("region", ""),
-        "L37": payload.get("present_address", "") or payload.get("previous_address", ""),
-        "J39": payload.get("ownership", ""),
-        "AD41": payload.get("ownership", ""),
-        "AD42": "",
-        "AD43": payload.get("outcome", ""),
-        "E49": payload.get("length_of_stay", ""),
-        "B53": payload.get("residence_description", ""),
-        "W53": payload.get("contact_number", ""),
-        "AF53": payload.get("ownership", ""),
-        "P54": payload.get("lot_area", ""),
-        "P55": payload.get("floor_area", ""),
-        "K58": payload.get("vehicles", ""),
-        "B61": payload.get("general_appearance", ""),
-        "B64": payload.get("utility_bills", ""),
-        "K64": payload.get("remarks", ""),
-        "W64": payload.get("neighborhood_classification", ""),
-        "B71": payload.get("neighborhood", ""),
-        "P71": payload.get("accessibility", ""),
-        "W71": payload.get("landmark", ""),
-        "AF71": payload.get("bdo_distance", ""),
-        "B80": payload.get("vehicles", ""),
-        "B86": payload.get("remarks", ""),
-        "B98": payload["main_informant_details"].get("name", ""),
-        "T98": payload["main_informant_details"].get("relationship", ""),
+        "B25": payload["dependent_rows"][0]["name"] if len(payload["dependent_rows"]) > 0 else "",
+        "J25": payload["dependent_rows"][0]["age"] if len(payload["dependent_rows"]) > 0 else "",
+        "O25": payload["dependent_rows"][0]["school"] if len(payload["dependent_rows"]) > 0 else "",
+        "Y25": payload["dependent_rows"][0]["grade"] if len(payload["dependent_rows"]) > 0 else "",
+        "AE25": payload["dependent_rows"][0]["course"] if len(payload["dependent_rows"]) > 0 else "",
+        "B26": payload["dependent_rows"][1]["name"] if len(payload["dependent_rows"]) > 1 else "",
+        "J26": payload["dependent_rows"][1]["age"] if len(payload["dependent_rows"]) > 1 else "",
+        "O26": payload["dependent_rows"][1]["school"] if len(payload["dependent_rows"]) > 1 else "",
+        "Y26": payload["dependent_rows"][1]["grade"] if len(payload["dependent_rows"]) > 1 else "",
+        "AE26": payload["dependent_rows"][1]["course"] if len(payload["dependent_rows"]) > 1 else "",
+        "B29": address_parts.get("unit_building", ""),
+        "H29": address_parts.get("street", ""),
+        "N29": address_parts.get("village_subdivision", ""),
+        "T29": address_parts.get("barangay", ""),
+        "Y29": address_parts.get("city", ""),
+        "AE29": address_parts.get("province", ""),
+        "AJ29": address_parts.get("region", ""),
+        "L32": payload.get("present_address", "") or payload.get("previous_address", ""),
+        "B35": payload.get("ownership", ""),
+        "AD36": payload.get("landlord_name", ""),
+        "AD37": payload.get("rental_fee", "") or payload.get("vehicle_monthly_amortization", ""),
+        "AD38": payload.get("outcome", ""),
+        "E44": payload.get("length_of_stay", ""),
+        "B47": payload.get("residence_description", ""),
+        "W47": payload.get("contact_number", ""),
+        "AF47": payload.get("subject_income", "") or payload.get("ownership", ""),
+        "P49": payload.get("lot_area", ""),
+        "P50": payload.get("floor_area", ""),
+        "B56": payload.get("general_appearance", ""),
+        "B59": payload.get("utility_bills", "") or payload.get("basis_of_ownership_verification", ""),
+        "K59": payload.get("adverse_finding", "") or payload.get("remarks", ""),
+        "W59": payload.get("neighborhood_classification", ""),
+        "B65": payload.get("neighborhood", ""),
+        "P65": payload.get("accessibility", ""),
+        "W66": payload.get("landmark", ""),
+        "AG66": payload.get("bdo_distance", ""),
+        "W67": payload.get("corner", ""),
+        "W68": payload.get("time_of_visit", ""),
+        "W69": payload.get("security_guard_hoa", ""),
+        "B74": vehicle_details.get("make_model", ""),
+        "L74": vehicle_details.get("year_model", ""),
+        "Q74": payload.get("vehicle_owned_or_mortgage", ""),
+        "V74": payload.get("ownership", "") if compact_value(payload.get("vehicle_owned_or_mortgage", "")).lower().startswith("mort") else "",
+        "AC74": payload.get("vehicle_monthly_amortization", ""),
+        "B79": payload.get("ci_remarks_observation", "") or payload.get("remarks", ""),
+        "B103": payload.get("field_investigator", ""),
+        "T103": payload.get("requesting_officer", ""),
     }
 
     for cell_ref, value in cell_map.items():
         set_value(sheet, cell_ref, value)
 
-    informant_rows = [98, 99, 100]
-    all_informants = payload["informant_list"][:3]
+    informant_rows = [91, 92, 93, 94, 95, 96, 97, 98]
+    all_informants = payload["maybank_informants"][:8]
     for row_number, informant in zip(informant_rows, all_informants):
         set_value(sheet, f"B{row_number}", informant.get("name", ""))
         set_value(sheet, f"T{row_number}", informant.get("relationship", ""))
