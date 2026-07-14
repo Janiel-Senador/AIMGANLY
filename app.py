@@ -511,6 +511,27 @@ def render_officer_notes_section(record: Dict[str, Any]) -> None:
         st.markdown(f'<div class="note-box">{notes_text}</div>', unsafe_allow_html=True)
 
 
+def render_ao_notes_preview_section(record: Dict[str, Any]) -> None:
+    record_id = record.get("id", "record")
+    notes_text = record.get("ci_notes", "")
+    collapsed_key = f"ao_preview_notes_collapsed_{record_id}"
+    st.session_state.setdefault(collapsed_key, False)
+
+    title_col, toggle_col = st.columns([7.8, 1.6])
+    with title_col:
+        st.markdown('<div class="section-title" style="margin-top:14px;">CI Notes Preview</div>', unsafe_allow_html=True)
+    with toggle_col:
+        toggle_label = "Expand" if st.session_state[collapsed_key] else "Minimize"
+        if st.button(toggle_label, key=f"ao_preview_toggle_notes_{record_id}", use_container_width=True):
+            st.session_state[collapsed_key] = not st.session_state[collapsed_key]
+            st.rerun()
+
+    if st.session_state[collapsed_key]:
+        st.caption("CI notes preview minimized.")
+    else:
+        st.markdown(f'<div class="note-box">{notes_text}</div>', unsafe_allow_html=True)
+
+
 def render_ci_dashboard(user: Dict[str, str]) -> None:
     if st.session_state.get("ci_clear_submit_notes"):
         st.session_state["ci_submit_notes"] = ""
@@ -733,8 +754,7 @@ def render_ao_dashboard(user: Dict[str, str]) -> None:
             selected_record = get_record(selected_id)
             if selected_record:
                 render_record_metadata(selected_record)
-                st.markdown('<div class="section-title" style="margin-top:14px;">CI Notes Preview</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="note-box">{selected_record.get("ci_notes", "")}</div>', unsafe_allow_html=True)
+                render_ao_notes_preview_section(selected_record)
                 if st.button("Load Selected Record Into Workspace", type="primary", use_container_width=True):
                     load_record_to_workspace(selected_record)
                     st.success(f"Loaded record {selected_record['id']} into the AO workspace.")
