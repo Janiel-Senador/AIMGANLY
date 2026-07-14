@@ -5,3 +5,9 @@ __pycache__/
 .streamlit/
 data/
 exports/
+python_papp/.venv/
+python_papp/__pycache__/
+python_papp/*.pyc
+python_papp/.streamlit/
+python_papp/data/
+python_papp/exports/

@@ -1,64 +1,42 @@
-# Enterprise AI Image Analyzer
+# AIMGANLY
 
-A professional Python web application for property, asset, and inspection image analysis using the Gemini API.
+This repository now contains two app versions:
 
-## Features
+- `php_app/` - the active PHP version
+- `python_papp/` - the old Python Streamlit version moved into its own folder
 
-- Upload a single image for inspection
-- Detect visible objects such as gates, houses, wood, metal, walls, roofs, and more
-- Rate each object using:
-  - very bad
-  - poor
-  - fair
-  - good
-  - very good
-  - excellent
-- Highlight visible issues like rust, damage, wear, cracks, moisture, and rot
-- Show executive summary, risk highlights, and recommendations
-- Present a professional dashboard-style interface for enterprise users
+## Active App
 
-## Project Files
+The active app is the PHP rewrite inside `php_app`.
 
-- `app.py` - Streamlit user interface
-- `gemini_client.py` - Gemini API integration and response parsing
-- `requirements.txt` - Python dependencies
-- `.env.example` - environment variable template
-
-## Setup
-
-1. Create and activate a virtual environment:
+Run it with:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+cd php_app
+composer install
+php -S 127.0.0.1:8000 -t public
 ```
 
-2. Install dependencies:
+Open:
 
-```powershell
-pip install -r requirements.txt
+```text
+http://127.0.0.1:8000
 ```
 
-3. Create a `.env` file:
+## Legacy Python App
 
-```powershell
-Copy-Item .env.example .env
-```
+The previous Python app is preserved in `python_papp`.
 
-4. Open `.env` and add your real Gemini API key:
+That folder contains:
 
-```env
-GEMINI_API_KEY=your_real_api_key_here
-```
+- `app.py`
+- `ci_utils.py`
+- `gemini_client.py`
+- `inventory_store.py`
+- `requirements.txt`
+- `.env.example`
 
-## Run
+## Shared Assets
 
-```powershell
-streamlit run app.py
-```
-
-## Notes
-
-- The app uses the Gemini image-capable endpoint and sends the uploaded image directly for analysis.
-- Results are AI-generated from visible image evidence only.
-- For production deployment, keep the API key in environment variables and do not hardcode it in source code.
+- `maybank/pdrn/` keeps the Maybank workbook template used by the app
+- root `.env` can still be used for shared secrets like `GEMINI_API_KEY`
