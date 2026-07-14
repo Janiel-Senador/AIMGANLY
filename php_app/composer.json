@@ -1,0 +1,15 @@
+{
+  "name": "janiel-senador/aimganly-php",
+  "description": "PHP rewrite of the AIMGANLY CI -> AO -> Officer workflow with PDRN generation and Gemini analysis.",
+  "type": "project",
+  "require": {
+    "php": "^8.3",
+    "phpoffice/phpspreadsheet": "^3.9",
+    "vlucas/phpdotenv": "^5.6"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/"
+    }
+  }
+}

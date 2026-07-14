@@ -1,0 +1,5 @@
+/vendor/
+/storage/exports/
+/storage/*.log
+/storage/*.json
+!/storage/.gitkeep
