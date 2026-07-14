@@ -1,6 +1,7 @@
 import re
 from copy import deepcopy
 from datetime import datetime
+from html import unescape
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -33,18 +34,40 @@ CI_FORM_DEFAULTS: Dict[str, Any] = {
     "subject_last_name": "",
     "subject_first_name": "",
     "subject_middle_name": "",
+    "subject_maiden_middle_name": "",
     "subject_nickname": "",
     "subject_bday_age": "",
     "subject_birthplace": "",
     "subject_civil_status": "",
+    "subject_years_married_or_separated": "",
     "subject_gender": "",
     "subject_nationality": "",
     "subject_education": "",
+    "purpose_of_loan": "",
     "subject_employment": "",
     "subject_business": "",
+    "subject_employer_name": "",
+    "subject_employer_address": "",
+    "subject_position": "",
+    "subject_tenure": "",
+    "subject_salary": "",
+    "subject_employment_status": "",
+    "subject_ofw_status": "",
+    "subject_departure_date": "",
+    "subject_arrival_date": "",
+    "subject_business_name": "",
+    "subject_business_address": "",
+    "subject_business_years_of_operation": "",
+    "subject_monthly_gross_income": "",
+    "subject_monthly_net_income": "",
+    "subject_monthly_remittance_amount": "",
+    "subject_remittance_center": "",
+    "subject_remittance_branch": "",
+    "subject_sender_name": "",
     "spouse_last_name": "",
     "spouse_first_name": "",
     "spouse_middle_name": "",
+    "spouse_maiden_middle_name": "",
     "spouse_nickname": "",
     "spouse_bday_age": "",
     "spouse_birthplace": "",
@@ -54,7 +77,25 @@ CI_FORM_DEFAULTS: Dict[str, Any] = {
     "spouse_education": "",
     "spouse_employment": "",
     "spouse_business": "",
+    "spouse_employer_name": "",
+    "spouse_employer_address": "",
+    "spouse_position": "",
+    "spouse_tenure": "",
+    "spouse_salary": "",
+    "spouse_employment_status": "",
+    "spouse_business_name": "",
+    "spouse_business_address": "",
+    "spouse_business_years_of_operation": "",
+    "spouse_monthly_gross_income": "",
+    "spouse_monthly_net_income": "",
+    "spouse_monthly_remittance_amount": "",
+    "spouse_remittance_center": "",
+    "spouse_remittance_branch": "",
+    "spouse_sender_name": "",
+    "spouse_relationship_to_sender": "",
     "dependents": "",
+    "given_address": "",
+    "verified_address": "",
     "complete_address": "",
     "present_address": "",
     "previous_address": "",
@@ -63,10 +104,20 @@ CI_FORM_DEFAULTS: Dict[str, Any] = {
     "contact_number": "",
     "length_of_stay": "",
     "ownership": "",
+    "landlord_name": "",
+    "rental_fee": "",
     "vehicles": "",
+    "vehicle_unit_year_model": "",
+    "vehicle_owned_or_mortgage": "",
+    "vehicle_seen_status": "",
+    "vehicle_condition": "",
+    "vehicle_monthly_amortization": "",
+    "vehicle_years_to_pay": "",
+    "vehicle_remaining_years_to_pay": "",
     "type_of_residence": "",
     "no_of_storey": "",
     "classification": "",
+    "area": "",
     "house_condition": "",
     "made_of": "",
     "appearance": "",
@@ -77,11 +128,14 @@ CI_FORM_DEFAULTS: Dict[str, Any] = {
     "fence_color": "",
     "interior": "",
     "exterior": "",
+    "no_of_bedroom": "",
+    "no_of_toilet_bath": "",
     "parking": "",
     "lot_area": "",
     "floor_area": "",
     "landmark": "",
     "corner": "",
+    "security_guard_hoa": "",
     "time_of_visit": "",
     "nearest_bdo_branch": "",
     "bdo_distance": "",
@@ -93,6 +147,52 @@ CI_FORM_DEFAULTS: Dict[str, Any] = {
     "neighborhood_classification": "",
     "area_definition": "",
     "adverse_finding": "",
+    "ci_remarks_observation": "",
+    "barangay_informant_name": "",
+    "barangay_informant_position": "",
+    "barangay_informant_age": "",
+    "barangay_informant_contact_number": "",
+    "barangay_informant_address": "",
+    "barangay_subject_known": "",
+    "barangay_subject_voter": "",
+    "barangay_subject_resident": "",
+    "barangay_has_bad_record": "",
+    "barangay_same_address": "",
+    "barangay_record_based_on": "",
+    "barangay_selfie_picture": "",
+    "barangay_logbook_picture": "",
+    "barangay_voter_record_picture": "",
+    "barangay_remarks": "",
+    "neighbor_1_name": "",
+    "neighbor_1_age": "",
+    "neighbor_1_relationship": "",
+    "neighbor_1_years_in_area": "",
+    "neighbor_1_address": "",
+    "neighbor_1_known": "",
+    "neighbor_1_selfie_picture": "",
+    "neighbor_1_remarks": "",
+    "neighbor_2_name": "",
+    "neighbor_2_age": "",
+    "neighbor_2_relationship": "",
+    "neighbor_2_years_in_area": "",
+    "neighbor_2_address": "",
+    "neighbor_2_known": "",
+    "neighbor_2_selfie_picture": "",
+    "neighbor_2_remarks": "",
+    "neighbor_3_name": "",
+    "neighbor_3_age": "",
+    "neighbor_3_relationship": "",
+    "neighbor_3_years_in_area": "",
+    "neighbor_3_address": "",
+    "neighbor_3_known": "",
+    "neighbor_3_selfie_picture": "",
+    "neighbor_3_remarks": "",
+    "main_informant_name": "",
+    "main_informant_address": "",
+    "main_informant_age": "",
+    "main_informant_relationship": "",
+    "main_informant_selfie_picture": "",
+    "main_informant_remarks": "",
     "remarks": "",
     "informants": "",
     "main_informant": "",
@@ -115,17 +215,32 @@ DIRECT_FIELD_MAP = {
     "EDUCATIONAL ATTAINMENT": "subject_education",
     "EMPLOYMENT": "subject_employment",
     "BUSINESS": "subject_business",
+    "PURPOSE OF LOAN": "purpose_of_loan",
+    "GIVEN ADDRESS": "given_address",
+    "VERIFIED ADDRESS": "verified_address",
     "COMPLETE ADDRESS": "complete_address",
     "PRESENT ADDRESS": "present_address",
     "LENGTH OF STAY": "length_of_stay",
     "PREVIOUS": "previous_address",
+    "PREVIOUS ADDRESS": "previous_address",
     "PROVINCE": "province",
+    "CONTACT NUMBER TELEPHONE NUMBER": "contact_number",
     "CONTACT NUMBER": "contact_number",
     "OWNERSHIP": "ownership",
+    "NAME OF LANDLORD": "landlord_name",
+    "RENTAL FEE": "rental_fee",
     "VEHICLES": "vehicles",
+    "UNIT YEAR MODEL": "vehicle_unit_year_model",
+    "OWNED OR MORTGAGE": "vehicle_owned_or_mortgage",
+    "SEEN NOT SEEN": "vehicle_seen_status",
+    "CONDITION": "vehicle_condition",
+    "MONTHLY AMORTIZATION IF MORTGAGED": "vehicle_monthly_amortization",
+    "YEARS TO PAY": "vehicle_years_to_pay",
+    "REMAINING YEARS TO PAY": "vehicle_remaining_years_to_pay",
     "TYPE OF RESIDENCE": "type_of_residence",
     "NO OF STOREY": "no_of_storey",
     "CLASSIFICATION": "classification",
+    "AREA": "area",
     "HOUSE CONDITION": "house_condition",
     "MADE": "made_of",
     "APPEARANCE": "appearance",
@@ -136,14 +251,22 @@ DIRECT_FIELD_MAP = {
     "FENCE COLOR": "fence_color",
     "INTERIOR": "interior",
     "EXTERIOR": "exterior",
+    "NO OF BEDROOM": "no_of_bedroom",
+    "NO OF TOILET BATH": "no_of_toilet_bath",
+    "LIVING CONDITION": "living_condition",
     "PARKING": "parking",
+    "PARKING GARAGE": "parking",
     "LOT AREA": "lot_area",
     "FLOOR AREA": "floor_area",
+    "LANDMARK AND METERS AWAY": "landmark",
     "LANDMARK": "landmark",
+    "NEAREST CORNER": "corner",
     "CORNER": "corner",
+    "IF WITH SECURITY GUARD AND HOA OFFICE": "security_guard_hoa",
     "TIME OF VISIT": "time_of_visit",
     "NEAREST BDO BRANCH": "nearest_bdo_branch",
     "KILOMETERS METERS AWAY": "bdo_distance",
+    "CI REMARKS AND OBSERVATION": "ci_remarks_observation",
 }
 
 
@@ -151,11 +274,14 @@ PERSON_FIELD_MAP = {
     "LAST NAME": "last_name",
     "FIRST NAME": "first_name",
     "MIDDLE NAME": "middle_name",
+    "MAIDEN MIDDLE NAME": "maiden_middle_name",
     "NICKNAME": "nickname",
     "BDAY AGE": "bday_age",
     "BIRTHPLACE": "birthplace",
     "CIVIL STATUS": "civil_status",
+    "NO OF YEARS MARRIED OR SEPARATED": "years_married_or_separated",
     "NATIONALITY": "nationality",
+    "EDUCATION ATTAINMENT": "education",
     "EDUCATIONAL ATTAINMENT": "education",
 }
 
@@ -163,6 +289,72 @@ PERSON_FIELD_MAP = {
 SECTION_TOKENS = {
     "NAME OF SUBJECT": "subject",
     "NAME OF SPOUSE LIVE IN PARTNER": "spouse",
+}
+
+
+INCOME_FIELD_MAP = {
+    "EMPLOYER NAME": "employer_name",
+    "ADDRESS": "employer_address",
+    "POSITION": "position",
+    "TENURE LENGTH OF SERVICE": "tenure",
+    "SALARY": "salary",
+    "STATUS": "employment_status",
+    "IF OFW SEAMAN ASK IF CURRENTLY ON BOARD ON VACATION": "ofw_status",
+    "DEPARTURE DATE": "departure_date",
+    "ARRIVAL DATE": "arrival_date",
+    "BUSINESS NAME": "business_name",
+    "YEARS OF OPERATION": "business_years_of_operation",
+    "MONTHLY GROSS INCOME": "monthly_gross_income",
+    "MONTHLY NET INCOME": "monthly_net_income",
+    "MONTHLY REMITTANCE ALLOTMENT AMOUNT": "monthly_remittance_amount",
+    "MONTHLY REMITTANCE AMOUNT": "monthly_remittance_amount",
+    "BANK REMITTANCE CENTER": "remittance_center",
+    "ADDRESS BRANCH": "remittance_branch",
+    "SENDER S NAME": "sender_name",
+    "RELATIONSHIP TO SENDER": "relationship_to_sender",
+}
+
+
+SECTION_HEADINGS = {
+    "SOURCES OF INCOME OF SUBJECT": "subject_income",
+    "SOURCES OF INCOME OF SPOUSE": "spouse_income",
+    "VEHICLES": "vehicle",
+    "INFORMANTS REMARKS": "informants",
+}
+
+
+INFORMANT_SLOT_MAP = {
+    "BARANGAY INFORMANT S NAME": "barangay_informant",
+    "NEIGHBOR S NAME": "neighbor",
+    "NEIGHBOR NAME": "neighbor",
+    "MAIN INFORMANT S NAME": "main_informant",
+}
+
+
+INFORMANT_FIELD_MAP = {
+    "BARANGAY INFORMANT S NAME": "name",
+    "POSITION": "position",
+    "AGE": "age",
+    "CONTACT NUMBER": "contact_number",
+    "BARANGAY ADDRESS": "address",
+    "IF SUBJECT COMAKER IS KNOWN OR UNKNOWN": "known",
+    "IF SUBJECT COMAKER IS VOTER OR NOT VOTER": "voter",
+    "IF SUBJECT COMAKER IS RESIDENT OR NOT RESIDENT": "resident",
+    "IF SUBJECT COMAKER HAS BAD RECORD": "has_bad_record",
+    "IF THE GIVEN ADDRESS IS THE SAME IN RECORD": "same_address",
+    "RECORD IS BASED ON": "record_based_on",
+    "SELFIE PICTURE": "selfie_picture",
+    "PICTURE OF LOGBOOK": "logbook_picture",
+    "PICTURE OF VOTER S RECORD": "voter_record_picture",
+    "NEIGHBOR S NAME": "name",
+    "NEIGHBOR NAME": "name",
+    "RELATION TO SUBJECT COMAKER": "relationship",
+    "YEARS IN THE AREA": "years_in_area",
+    "YEARS IN THE AREA OF NEIGHBOR": "years_in_area",
+    "ADDRESS": "address",
+    "MAIN INFORMANT S NAME": "name",
+    "RELATION TO SUBJECT": "relationship",
+    "REMARKS": "remarks",
 }
 
 
@@ -352,79 +544,297 @@ def parse_informant_lines(value: str) -> List[Dict[str, str]]:
     return records[:4]
 
 
+def clean_notes_text(notes: str) -> str:
+    value = unescape(notes or "")
+    value = value.replace("\xa0", " ")
+    return value.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def strip_label_prefix(value: str) -> str:
+    cleaned = normalize_label(value)
+    return re.sub(r"^\d+\s*", "", cleaned).strip()
+
+
+def set_record_value(record: Dict[str, Any], key: str, value: str, append: bool = False) -> None:
+    if key not in record:
+        return
+    cleaned = value.strip()
+    if not cleaned:
+        return
+    if append and record.get(key):
+        record[key] = f"{record[key]}\n{cleaned}".strip()
+        return
+    record[key] = cleaned
+
+
+def resolve_informant_record_key(slot: str, field_name: str) -> str:
+    if slot == "barangay_informant":
+        return {
+            "name": "barangay_informant_name",
+            "position": "barangay_informant_position",
+            "age": "barangay_informant_age",
+            "contact_number": "barangay_informant_contact_number",
+            "address": "barangay_informant_address",
+            "known": "barangay_subject_known",
+            "voter": "barangay_subject_voter",
+            "resident": "barangay_subject_resident",
+            "has_bad_record": "barangay_has_bad_record",
+            "same_address": "barangay_same_address",
+            "record_based_on": "barangay_record_based_on",
+            "selfie_picture": "barangay_selfie_picture",
+            "logbook_picture": "barangay_logbook_picture",
+            "voter_record_picture": "barangay_voter_record_picture",
+            "remarks": "barangay_remarks",
+        }.get(field_name, "")
+
+    if slot.startswith("neighbor_"):
+        return {
+            "name": f"{slot}_name",
+            "age": f"{slot}_age",
+            "relationship": f"{slot}_relationship",
+            "years_in_area": f"{slot}_years_in_area",
+            "address": f"{slot}_address",
+            "known": f"{slot}_known",
+            "selfie_picture": f"{slot}_selfie_picture",
+            "remarks": f"{slot}_remarks",
+        }.get(field_name, "")
+
+    if slot == "main_informant":
+        return {
+            "name": "main_informant_name",
+            "address": "main_informant_address",
+            "age": "main_informant_age",
+            "relationship": "main_informant_relationship",
+            "selfie_picture": "main_informant_selfie_picture",
+            "remarks": "main_informant_remarks",
+        }.get(field_name, "")
+
+    return ""
+
+
+def set_informant_value(record: Dict[str, Any], slot: str, field_name: str, value: str) -> None:
+    target_key = resolve_informant_record_key(slot, field_name)
+    if not target_key:
+        return
+    set_record_value(record, target_key, value, append=field_name == "remarks")
+
+
+def build_structured_informants_summary(record: Dict[str, Any]) -> str:
+    lines: List[str] = []
+
+    if compact_value(record.get("barangay_informant_name", "")):
+        barangay_parts = [
+            record.get("barangay_informant_name", ""),
+            record.get("barangay_informant_position", ""),
+            record.get("barangay_subject_known", ""),
+            record.get("barangay_informant_address", ""),
+        ]
+        lines.append(compact_value(" / ".join(part for part in barangay_parts if compact_value(part))))
+
+    for index in range(1, 4):
+        prefix = f"neighbor_{index}"
+        if not compact_value(record.get(f"{prefix}_name", "")):
+            continue
+        neighbor_parts = [
+            record.get(f"{prefix}_name", ""),
+            record.get(f"{prefix}_relationship", ""),
+            record.get(f"{prefix}_known", ""),
+            record.get(f"{prefix}_address", ""),
+        ]
+        lines.append(compact_value(" / ".join(part for part in neighbor_parts if compact_value(part))))
+
+    return "\n".join(line for line in lines if line).strip()
+
+
+def build_structured_main_informant(record: Dict[str, Any]) -> str:
+    if not compact_value(record.get("main_informant_name", "")):
+        return ""
+
+    detail_lines = [record.get("main_informant_name", "").strip()]
+    extras = [
+        record.get("main_informant_relationship", ""),
+        record.get("main_informant_address", ""),
+        record.get("main_informant_remarks", ""),
+    ]
+    extras = [compact_value(value) for value in extras if compact_value(value)]
+    if extras:
+        detail_lines.append(" | ".join(extras))
+    return "\n".join(detail_lines).strip()
+
+
 def parse_ci_notes(notes: str) -> Dict[str, Any]:
+    notes = clean_notes_text(notes)
     record = deepcopy(CI_FORM_DEFAULTS)
     record["raw_notes"] = notes.strip()
 
     current_person = "subject"
-    current_block = ""
-    block_buffers: Dict[str, List[str]] = {"remarks": [], "informants": [], "main_informant": [], "dependents": []}
+    current_income_person = ""
+    current_income_mode = ""
+    current_informant_slot = ""
+    current_field_label = ""
+    current_field_lines: List[str] = []
+    neighbor_counter = 0
+
+    def commit_field() -> None:
+        nonlocal current_field_label, current_field_lines, current_informant_slot, neighbor_counter
+        if not current_field_label:
+            return
+
+        label_base = strip_label_prefix(current_field_label)
+        value = "\n".join(line for line in current_field_lines if line.strip()).strip()
+        if re.fullmatch(r"[.\-_/ ]*", value or ""):
+            value = ""
+
+        slot_type = INFORMANT_SLOT_MAP.get(label_base)
+        if label_base.startswith("MAIN INFORMANT"):
+            slot_type = "main_informant"
+        if slot_type == "barangay_informant":
+            current_informant_slot = "barangay_informant"
+        elif slot_type == "neighbor":
+            neighbor_counter += 1
+            current_informant_slot = f"neighbor_{min(neighbor_counter, 3)}"
+        elif slot_type == "main_informant":
+            current_informant_slot = "main_informant"
+
+        if label_base.startswith("DEPENDENTS AGE SCHOOL"):
+            set_record_value(record, "dependents", value, append=bool(record.get("dependents")))
+        elif label_base == "INFORMANTS":
+            set_record_value(record, "informants", value, append=bool(record.get("informants")))
+        elif label_base.startswith("MAIN INFORMANT") and not current_informant_slot:
+            set_record_value(record, "main_informant", value, append=bool(record.get("main_informant")))
+        elif current_informant_slot and label_base in INFORMANT_FIELD_MAP:
+            set_informant_value(record, current_informant_slot, INFORMANT_FIELD_MAP[label_base], value)
+        elif label_base == "REMARKS":
+            if current_informant_slot:
+                set_informant_value(record, current_informant_slot, "remarks", value)
+            else:
+                set_record_value(record, "remarks", value, append=bool(record.get("remarks")))
+        elif label_base in PERSON_FIELD_MAP:
+            field_name = f"{current_person}_{PERSON_FIELD_MAP[label_base]}"
+            set_record_value(record, field_name, value)
+        elif label_base in {"EMPLOYMENT", "BUSINESS"}:
+            target_person = current_income_person or current_person
+            set_record_value(record, f"{target_person}_{label_base.lower()}", value)
+        elif current_income_person:
+            income_field = INCOME_FIELD_MAP.get(label_base)
+            if income_field:
+                set_record_value(record, f"{current_income_person}_{income_field}", value)
+                if label_base == "EMPLOYER NAME":
+                    set_record_value(record, f"{current_income_person}_employment", value)
+                if label_base == "BUSINESS NAME":
+                    set_record_value(record, f"{current_income_person}_business", value)
+            elif label_base == "ADDRESS":
+                if current_income_mode == "business":
+                    set_record_value(record, f"{current_income_person}_business_address", value)
+                else:
+                    set_record_value(record, f"{current_income_person}_employer_address", value)
+            else:
+                target_key = DIRECT_FIELD_MAP.get(label_base)
+                if target_key:
+                    set_record_value(record, target_key, value)
+        else:
+            target_key = DIRECT_FIELD_MAP.get(label_base)
+            if target_key:
+                set_record_value(record, target_key, value)
+
+        if label_base.startswith("MAIN INFORMANT") and current_informant_slot == "main_informant":
+            set_record_value(record, "main_informant", value, append=bool(record.get("main_informant")))
+
+        current_field_label = ""
+        current_field_lines = []
 
     for raw_line in notes.splitlines():
         line = raw_line.strip()
         if not line:
             continue
 
-        normalized = normalize_label(line)
+        if re.fullmatch(r"[-=*_\s]+", line):
+            commit_field()
+            continue
+
+        normalized = strip_label_prefix(line.rstrip(":"))
+        if normalized in {"REMINDER", "IF RENTAL", "FOR BDO ACCOUNT", "FOR ALL ACCOUNT", "FOR CBS ACCOUNT", "PHYSICAL ATTRIBUTES", "PHYSICAL ATTRIBUTES FOR PNB"}:
+            commit_field()
+            continue
+
         if normalized in SECTION_TOKENS:
+            commit_field()
             current_person = SECTION_TOKENS[normalized]
-            current_block = ""
+            current_income_person = ""
+            current_income_mode = ""
+            current_informant_slot = ""
             continue
 
-        if normalized.startswith("REMARKS"):
-            current_block = "remarks"
-            value = line.split(":", 1)[1].strip() if ":" in line else ""
-            if value:
-                block_buffers["remarks"].append(value)
+        section_name = SECTION_HEADINGS.get(normalized)
+        if section_name:
+            commit_field()
+            current_informant_slot = ""
+            if section_name == "subject_income":
+                current_income_person = "subject"
+                current_income_mode = ""
+            elif section_name == "spouse_income":
+                current_income_person = "spouse"
+                current_income_mode = ""
+            else:
+                current_income_person = ""
+                current_income_mode = ""
             continue
 
-        if normalized == "INFORMANTS":
-            current_block = "informants"
+        if normalized == "SOURCES OF INCOME":
+            commit_field()
+            current_income_person = current_person
+            current_income_mode = ""
             continue
 
-        if normalized.startswith("MAIN INFORMANT"):
-            current_block = "main_informant"
-            value = line.split(":", 1)[1].strip() if ":" in line else ""
-            if value:
-                block_buffers["main_informant"].append(value)
+        if ":" not in line and normalized in {"IF EMPLOYMENT", "EMPLOYMENT"}:
+            commit_field()
+            if current_income_person:
+                current_income_mode = "employment"
+            continue
+
+        if ":" not in line and normalized in {"IF BUSINESS", "BUSINESS"}:
+            commit_field()
+            if current_income_person:
+                current_income_mode = "business"
+            continue
+
+        if ":" not in line and normalized in {"IF REMITTANCE", "IF REMITTANCE ALLOTMENT"}:
+            commit_field()
+            if current_income_person:
+                current_income_mode = "remittance"
             continue
 
         if normalized.startswith("DEPENDENTS AGE SCHOOL"):
-            current_block = "dependents"
+            commit_field()
+            current_field_label = "DEPENDENTS AGE SCHOOL"
+            current_field_lines = []
             continue
 
-        if ":" not in line and current_block in block_buffers:
-            block_buffers[current_block].append(line)
+        if ":" in line:
+            commit_field()
+            label, value = [part.strip() for part in line.split(":", 1)]
+            current_field_label = label
+            current_field_lines = [value] if value else []
             continue
 
-        if ":" not in line:
+        if current_field_label:
+            current_field_lines.append(line)
             continue
 
-        label, value = [part.strip() for part in line.split(":", 1)]
-        normalized_label = normalize_label(label)
-        current_block = ""
+    commit_field()
 
-        if normalized_label in PERSON_FIELD_MAP:
-            field_name = f"{current_person}_{PERSON_FIELD_MAP[normalized_label]}"
-            record[field_name] = value
-            continue
-
-        if current_person == "spouse" and normalized_label in {"EMPLOYMENT", "BUSINESS"}:
-            record[f"spouse_{normalized_label.lower()}"] = value
-            continue
-
-        if current_person == "subject" and normalized_label in {"EMPLOYMENT", "BUSINESS"}:
-            record[f"subject_{normalized_label.lower()}"] = value
-            continue
-
-        target_key = DIRECT_FIELD_MAP.get(normalized_label)
-        if target_key:
-            record[target_key] = value
-
-    record["dependents"] = "\n".join(block_buffers["dependents"]).strip()
-    record["remarks"] = "\n".join(block_buffers["remarks"]).strip()
-    record["informants"] = "\n".join(block_buffers["informants"]).strip()
-    record["main_informant"] = "\n".join(block_buffers["main_informant"]).strip()
+    if not record["complete_address"]:
+        record["complete_address"] = record.get("verified_address") or record.get("given_address", "")
+    if not record["present_address"]:
+        record["present_address"] = record.get("verified_address") or record.get("given_address", "")
+    if not record["vehicles"] and record.get("vehicle_unit_year_model"):
+        record["vehicles"] = record["vehicle_unit_year_model"]
+    if not record["remarks"] and record.get("ci_remarks_observation"):
+        record["remarks"] = record["ci_remarks_observation"]
+    if not record["informants"]:
+        record["informants"] = build_structured_informants_summary(record)
+    if not record["main_informant"]:
+        record["main_informant"] = build_structured_main_informant(record)
 
     if not record["field_investigator"]:
         record["field_investigator"] = "CI User"
